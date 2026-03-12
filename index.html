@@ -346,35 +346,42 @@ function aplicarFiltrosNPC() {
 }
 
 
+const bonusLabels = {
+  astab:'Attack Stab', aslash:'Attack Slash', acrush:'Attack Crush', amag:'Attack Magic', arang:'Attack Ranged',
+  dstab:'Def Stab', dslash:'Def Slash', dcrush:'Def Crush', dmag:'Def Magic', drang:'Def Ranged',
+  str:'Melee Str', rstr:'Ranged Str', mdmg:'Magic Dmg', prayer:'Prayer'
+};
+
+
+
 async function buscarBonuses(itemId) {
     const idStr = String(itemId);
     if (bonusCache[idStr] !== undefined) return bonusCache[idStr];
     
+    const nome = MAPPING.find(m => parseInt(m.id) === parseInt(itemId))?.name;
+    if (!nome) return bonusCache[idStr] = null;
+    
     try {
-        // OSRS Wiki API parse (confiável)
-        const nome = MAPPING.find(m => m.id == idStr)?.name || '';
-        if (!nome) { bonusCache[idStr] = null; return null; }
-        
-        const res = await fetch(`https://oldschool.runescape.wiki/api.php?action=parse&page=${encodeURIComponent(nome)}&prop=wikitext|text&format=json`);
+        const res = await fetch(`https://oldschool.runescape.wiki/api.php?action=parse&page=${encodeURIComponent(nome)}&prop=wikitext&format=json`);
         const data = await res.json();
-        const wikitext = data.parse?.wikitext?.['*'] || '';
+        const text = data.parse?.wikitext?.['*'] || '';
         
-        // Regex pra bonuses (ex: |attack_stab = +12|)
         const bonuses = {};
-        const regex = /\|(attack|defence|melee_strength|ranged_strength|magic_damage|prayer)_(\w+)\s*=\s*([+-]?\d+)/gi;
-        let match;
-        while (match = regex.exec(wikitext)) {
-            bonuses[`${match[1]}_${match[2]}`] = parseInt(match[3]);
-        }
+        const prefixes = ['astab','aslash','acrush','amag','arang','dstab','dslash','dcrush','dmag','drang','str','rstr','mdmg','prayer'];
+        prefixes.forEach(prefix => {
+            const m = text.match(new RegExp(`\\|${prefix}\\s*=\\s*([+-]?\\d+)`, 'i'));
+            if (m) bonuses[prefix] = parseInt(m[1]);
+        });
         
-        bonusCache[idStr] = bonuses;
-        return bonuses;
+        bonusCache[idStr] = Object.keys(bonuses).length ? bonuses : null;
+        return bonusCache[idStr];
     } catch(e) {
-        console.error('Bonus fail:', e);
+        console.error(e);
         bonusCache[idStr] = null;
         return null;
     }
 }
+
 
 
 
@@ -442,6 +449,37 @@ async function toggleBonus(itemId, btnEl) {
     renderBonuses(data, rowId)
 }
 
+
+async function showBonuses(itemId, btn) {
+    const div = document.getElementById('bonuses-'+itemId);
+    if (div.style.display !== 'none') {
+        div.style.display = 'none';
+        btn.textContent = '▶ Bonuses';
+        return;
+    }
+    
+    div.style.display = 'block';
+    btn.textContent = '▼ Bonuses';
+    div.innerHTML = 'Carregando...';
+    
+    const data = await buscarBonuses(itemId);
+    if (!data || Object.keys(data).length === 0) {
+        div.innerHTML = 'Sem bonuses';
+        return;
+    }
+    
+    let html = '';
+    for (let [prefix, val] of Object.entries(data)) {
+        const label = bonusLabels[prefix] || prefix;
+        const sign = val > 0 ? '+' : '';
+        const cls = val > 0 ? 'pos' : val < 0 ? 'neg' : 'muted';
+        html += `<div style="display:flex;justify-content:space-between;"><span>${label}</span><span class="${cls}">${sign}${val}</span></div>`;
+    }
+    div.innerHTML = html;
+}
+
+
+
 function renderNPC() {
     const inicio = npcPag * POR_PAGINA
     const pagina = npcFiltrados.slice(inicio, inicio + POR_PAGINA)
@@ -453,17 +491,13 @@ function renderNPC() {
     document.getElementById("npc-tbl").innerHTML = pagina.length === 0
         ? `<tr><td colspan="7" class="empty" style="text-align:center">Nenhum item encontrado</td></tr>`
         : pagina.map(it => `<tr>
-            <td class="muted">${it.id}</td>
-            <td>
-                <a href="https://oldschool.runescape.wiki/w/${it.name.replace(/ /g,'_')}" target="_blank" style="color:#f0d080;text-decoration:none;"><b>${it.name}</b></a>
-                <br><span style="color:#4a3820;font-size:0.75rem">${it.examine}</span>
-                <br><button class="bonus-toggle" onclick="toggleBonus(${it.id}, this)">▶ Bonuses</button>
-            </td>
-            <td><span class="badge ${it.members ? 'badge-members' : 'badge-free'}">${it.members ? 'Members' : 'F2P'}</span></td>
-            <td>${it.limit > 0 ? `<span class="gp">${it.limit.toLocaleString()}</span>` : `<span class="muted">—</span>`}</td>
-            <td>${it.value > 0 ? `<span class="gp">${it.value.toLocaleString()} gp</span>` : `<span class="muted">—</span>`}</td>
-            <td>${it.highalch > 0 ? `<span class="gp">${it.highalch.toLocaleString()} gp</span>` : `<span class="muted">—</span>`}</td>
-            <td>${it.lowalch > 0 ? `<span class="gp">${it.lowalch.toLocaleString()} gp</span>` : `<span class="muted">—</span>`}</td>
+<td>
+    <a href="https://oldschool.runescape.wiki/w/${it.name.replace(/ /g,'_')}" target="_blank" style="color:#f0d080"><b>${it.name}</b></a>
+    <br><span style="color:#4a3820;font-size:0.75rem">${it.examine}</span>
+    <button class="bonus-toggle" onclick="showBonuses(${it.id},this)">▶ Bonuses</button>
+    <div id="bonuses-${it.id}" style="display:none;margin-top:4px;padding:4px;background:#120c00;border:1px solid #3a2210;border-radius:2px;font-size:0.7rem;"></div>
+</td>
+
         </tr>`).join("")
 }
 
