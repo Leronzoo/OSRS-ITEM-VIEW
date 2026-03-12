@@ -345,35 +345,37 @@ function aplicarFiltrosNPC() {
     renderNPC()
 }
 
+
 async function buscarBonuses(itemId) {
     const idStr = String(itemId);
-    if (bonusCache[idStr]) return bonusCache[idStr];
+    if (bonusCache[idStr] !== undefined) return bonusCache[idStr];
     
-    // RuneLite API (mais completa)
     try {
-        const res = await fetch(`https://services.runelite.net/item/${idStr}`);
-        if (res.ok) {
-            const data = await res.json();
-            if (data && data.equipment) {
-                bonusCache[idStr] = data.equipment;
-                return data.equipment;
-            }
+        // OSRS Wiki API parse (confiável)
+        const nome = MAPPING.find(m => m.id == idStr)?.name || '';
+        if (!nome) { bonusCache[idStr] = null; return null; }
+        
+        const res = await fetch(`https://oldschool.runescape.wiki/api.php?action=parse&page=${encodeURIComponent(nome)}&prop=wikitext|text&format=json`);
+        const data = await res.json();
+        const wikitext = data.parse?.wikitext?.['*'] || '';
+        
+        // Regex pra bonuses (ex: |attack_stab = +12|)
+        const bonuses = {};
+        const regex = /\|(attack|defence|melee_strength|ranged_strength|magic_damage|prayer)_(\w+)\s*=\s*([+-]?\d+)/gi;
+        let match;
+        while (match = regex.exec(wikitext)) {
+            bonuses[`${match[1]}_${match[2]}`] = parseInt(match[3]);
         }
-    } catch(e) { }
-    
-    // Fallback osrsbox
-    try {
-        const res = await fetch(`https://api.osrsbox.com/equipment/${idStr}`);
-        if (res.ok) {
-            const data = await res.json();
-            bonusCache[idStr] = data;
-            return data;
-        }
-    } catch(e) { }
-    
-    bonusCache[idStr] = null;
-    return null;
+        
+        bonusCache[idStr] = bonuses;
+        return bonuses;
+    } catch(e) {
+        console.error('Bonus fail:', e);
+        bonusCache[idStr] = null;
+        return null;
+    }
 }
+
 
 
 
