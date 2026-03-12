@@ -346,23 +346,35 @@ function aplicarFiltrosNPC() {
 }
 
 async function buscarBonuses(itemId) {
-    const idStr = String(itemId); // garante string
-    if (bonusCache[idStr] !== undefined) return bonusCache[idStr];
+    const idStr = String(itemId);
+    if (bonusCache[idStr]) return bonusCache[idStr];
     
+    // RuneLite API (mais completa)
     try {
-        const res = await fetch(`https://api.osrsbox.com/equipment/${idStr}`, {
-            headers: { "User-Agent": "osrs-explorer/1.0 (+github.com/Leronzoo)" }
-        });
-        if (!res.ok) throw new Error(res.status);
-        const data = await res.json();
-        bonusCache[idStr] = data;
-        return data;
-    } catch(e) {
-        console.error('Bonus error:', e);
-        bonusCache[idStr] = null;
-        return null;
-    }
+        const res = await fetch(`https://services.runelite.net/item/${idStr}`);
+        if (res.ok) {
+            const data = await res.json();
+            if (data && data.equipment) {
+                bonusCache[idStr] = data.equipment;
+                return data.equipment;
+            }
+        }
+    } catch(e) { }
+    
+    // Fallback osrsbox
+    try {
+        const res = await fetch(`https://api.osrsbox.com/equipment/${idStr}`);
+        if (res.ok) {
+            const data = await res.json();
+            bonusCache[idStr] = data;
+            return data;
+        }
+    } catch(e) { }
+    
+    bonusCache[idStr] = null;
+    return null;
 }
+
 
 
 function renderBonuses(data, rowId) {
