@@ -346,20 +346,24 @@ function aplicarFiltrosNPC() {
 }
 
 async function buscarBonuses(itemId) {
-    if (bonusCache[itemId] !== undefined) return bonusCache[itemId]
+    const idStr = String(itemId); // garante string
+    if (bonusCache[idStr] !== undefined) return bonusCache[idStr];
+    
     try {
-        const res = await fetch(`https://api.osrsbox.com/equipment/${itemId}`, {
-            headers: { "User-Agent": "osrs-explorer/1.0" }
-        })
-        if (!res.ok) { bonusCache[itemId] = null; return null }
-        const data = await res.json()
-        bonusCache[itemId] = data
-        return data
-    } catch {
-        bonusCache[itemId] = null
-        return null
+        const res = await fetch(`https://api.osrsbox.com/equipment/${idStr}`, {
+            headers: { "User-Agent": "osrs-explorer/1.0 (+github.com/Leronzoo)" }
+        });
+        if (!res.ok) throw new Error(res.status);
+        const data = await res.json();
+        bonusCache[idStr] = data;
+        return data;
+    } catch(e) {
+        console.error('Bonus error:', e);
+        bonusCache[idStr] = null;
+        return null;
     }
 }
+
 
 function renderBonuses(data, rowId) {
     const row = document.getElementById(rowId)
